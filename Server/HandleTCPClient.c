@@ -5,30 +5,24 @@
 #include <unistd.h> /* for close() */
 
 #include "CoreDataAndFunctions.h"
-#define RCVBUFSIZE 32 /* Size of receive buffer */
 
 userAccount g_accounts[NUM_USERS];
 size_t g_currUsrId;
 
-char userList[100] = "Nancy Minnie Bob Andrew";
 void DieWithError(char *errorMessage); /* Error handling function */
-
-void askForLogin(int clntSocket)
-{
-    
-    send(clntSocket, "Logging in\n\n", 10,0);
-    send(clntSocket, "Enter Username\n", 14,0);
-    char buffer[RCVBUFSIZE];
-    /* Receive message from client */
-    int recvMsgSize; /* Size of received message */
-    if ((recvMsgSize = recv(clntSocket, buffer, RCVBUFSIZE, 0)) < 0)
-        DieWithError("recv() failed") ;
-    
-    close(clntSocket);
-}
 
 void sendUserList(int clntSocket)
 {
+    char userList[100];
+    
+    strcpy(userList, g_accounts[0].username);
+    strcat(userList, " ");
+    
+    for (size_t i  = 1;  i < NUM_USERS; i++) {
+        strcat(userList, g_accounts[i].username);
+        strcat(userList, " ");
+    }
+    
     if (send(clntSocket, userList, sizeof(userList), 0) < 0)
     {
         DieWithError("sendUserList() failed");
@@ -38,19 +32,49 @@ void sendUserList(int clntSocket)
 
 void recvUserMessage(size_t userid, char buffer[])
 {
-    buffer[0]=' ';buffer[1]=' ';buffer[2]=' '; buffer[3]=' ';
-    strcat(g_accounts[userid].messages, buffer);
+    //add curr user name to the messag:
     g_accounts[userid].num_msgs +=1;
-    //TODO: fix this.
-    //g_accounts[userid].messages[msgSize] = ' ';
-    //g_accounts[userid].idx_freespc+=msgSize + 1;
+    size_t j = g_accounts[userid].idx_freespc;
+    char * inboxRecv = g_accounts[userid].messages;
+    
+    char * sender = g_accounts[g_currUsrId].username;
+    size_t s = 0;
+    while(sender[s] != '\0')
+    {
+        inboxRecv[j] = sender[s];
+        j++; s++;
+    }
+    inboxRecv[j]=':';
+    inboxRecv[j+1] = ' ';
+    j+=2;
+    
+    size_t i = 0;
+    //get to the beg of the message
+    while (buffer[i] != '<') {
+        i++;
+    }
+    i++;
+    
+    while(buffer[i] != '>')
+    {
+        inboxRecv[j] = buffer[i];
+        j++; i++;
+    }
+    
+    g_accounts[userid].messages[j] = '\n';
+    inboxRecv[j+1] = '\0';
+    g_accounts[userid].idx_freespc = j+1;
     
 }
 
 
 void retriveUserMsgs(int clntSocket)
 {
-
+    char *msgs = g_accounts[g_currUsrId].messages;
+    if(send(clntSocket,msgs,150,0)<0)
+        perror("Unable to send messages to user");
+    else
+        printf("\nMessages sent successfull to user");
 }
 
 bool userLogin(char info[])
@@ -70,32 +94,38 @@ bool userLogin(char info[])
         read+=1;
         c = info[read];
     }
-    read++;
-    c = info[read];
-    while((c != '\0' || c != '%') && write < 12)
+    
+    while(write < 12)
     {
-        nm[write] = c;
-        read+=1;
+        read++;
         c = info[read];
+        
+        if(c=='%') break;
+        
+        nm[write] = c;
+        write++;
     }
     nm[write] = '\0';
     
     write = 0;
-    
-    while(c!='\0' && write < 12)
+    while(write < 12)
     {
-        read +=1;
+        read++;
         c = info[read];
+        if (c=='%') break;
         pswd[write] = c;
+        write++;
     }
+    pswd[write] = '\0';
+    
     bool userVerified = false;
     size_t userid;
     for (userid= 0; userid < NUM_USERS; ++userid) {
-        if (strcmp(g_accounts[userid].username, nm)) {
-            if(strcmp(g_accounts[userid].password, pswd))
-            {
+        if (strcmp(g_accounts[userid].username, nm) == 0) {
+            if(strcmp(g_accounts[userid].password, pswd) == 0)
                 userVerified = true;
-            }
+            
+            break;
         }
     }
     if (userVerified)
@@ -112,12 +142,12 @@ bool userLogin(char info[])
 //TODO: reserve first few bytes for the commands. And rest for data. 
 void HandleTCPClient(int clntSocket)
 {
-    char buffer[RCVBUFSIZE]; /* Buffer for echo string */
+    char buffer[SOCK_BUFFSIZE]; /* Buffer for echo string */
     int recvMsgSize = 0; /* Size of received message */
     //if ((recvMsgSize = recv(clntSocket, buffer, RCVBUFSIZE, 0)) < 0)
             //DieWithError("recv() failed") ;
     //Send User List:
-    if ((recvMsgSize = recv(clntSocket, buffer, RCVBUFSIZE, 0)) < 0)
+    if ((recvMsgSize = recv(clntSocket, buffer, SOCK_BUFFSIZE, 0)) < 0)
         DieWithError("recv() failed") ;
 
         while (recvMsgSize > 0) /* zero indicates end of transmission */
@@ -126,7 +156,13 @@ void HandleTCPClient(int clntSocket)
             if (buffer[0]=='0')
             {
                 
-                userLogin(buffer);
+                if(userLogin(buffer)==true)
+                {
+                    send(clntSocket, "0", 1, 0);
+                }else
+                {
+                    send(clntSocket, "9", 1, 0);
+                }
             }
             
             if (buffer[0] == '1')
@@ -139,7 +175,11 @@ void HandleTCPClient(int clntSocket)
             {
                 recvUserMessage(atoi(&buffer[1]), buffer);
             }
-            if ((recvMsgSize = recv(clntSocket, buffer, RCVBUFSIZE, 0)) < 0)
+            if(buffer[0] == '3')
+            {
+                retriveUserMsgs(clntSocket);
+            }
+            if ((recvMsgSize = recv(clntSocket, buffer, SOCK_BUFFSIZE, 0)) < 0)
                 DieWithError("recv() failed") ;
     
         }

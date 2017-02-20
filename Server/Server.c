@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-   setupAndListenSocket(atoi(argv[1])); /* First arg: local port */
+   setupAndListenSocket(atoi(argv[1]),&HandleTCPClient); /* First arg: local port */
 
     
 /* NOT REACHED */

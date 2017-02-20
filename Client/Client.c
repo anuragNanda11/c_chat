@@ -1,120 +1,49 @@
-#include <stdio.h> /* for printf() and fprintf() */
-#include <sys/socket.h> /* for socket(), connect(), send(), and recv() */
-#include <arpa/inet.h> /* for sockaddr_in and inet_addr() */
-#include <stdlib.h> /* for atoi() */
-#include <string.h> /* for memset() */
-#include <unistd.h> /* for close() */
-
-#define RCVBUFSIZE 32 /* Size of receive buffer */
-
-
-void HandleTCPClient(int clntSocket);
+#include <stdio.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "CoreDataAndFunctions.h"
 
-#define BUFFERSIZE 100
-char buffer[BUFFERSIZE + 1];
+void HandleTCPClient(int clntSocket);
 
-size_t getInput(char *question, char *inputBuffer, int bufferLength, size_t start_idx)
+char buffer[SOCK_BUFFSIZE];
+
+char userName[12];
+char password[12];
+
+bool wannaExit(char* in)
 {
-    //setup packet for sending to server.
-    //i.e. add the command number to the begining so that the server knows
-    //what to do with the message.
-    size_t totalChar = start_idx;
-    printf("%s  (Max %d characters)\n", question, bufferLength - 1);
-    
-    char in = fgetc(stdin);
-    
-    while (in == '\n' || in == ' ')
+    if (!in)
     {
-        in = fgetc(stdin);
+        return false;
     }
+    size_t i = 0;
     
-    while(in != '\n' && totalChar < bufferLength-1 )
+    while(1)
     {
-//        if (in == '\n')
-//        {
-//            inputBuffer[totalChar] = '\0';
-//        }
-//        else if (totalChar == bufferLength-1)
-//        {
-//            
-//        }
-        inputBuffer[totalChar] = in;
-        in = fgetc(stdin);
-        totalChar += 1;
+        if(in[i] == '\0' || in[i+1] =='\0'|| in[i+2] == '\0' )
+        {
+            return false;
+        }
+        if(in[i]=='b' && in[i+1] == 'y' && in[i+2] == 'e')
+        {
+           if(in[i+3]=='\0' || in[i+3] == ' ')
+           {
+               return true;
+           }
+        }
+        i+=1;
     }
-    
-    inputBuffer[totalChar] = '\0';
-    
-    return totalChar += 1;
-    
-    
-//    
-//    getchar();
-//    fgets(inputBuffer, bufferLength, stdin);
-//    if (inputBuffer[strlen(inputBuffer) -1] != '\n')
-//    {
-//        int dropped = 0;
-//        while (fgetc(stdin) != '\n')
-//            dropped++;
-//        
-//        if (dropped > 0) // if they input exactly (bufferLength - 1)
-//            // characters, there's only the \n to chop off
-//        {
-//            printf("Woah there partner, your input was over the limit by %d characters, try again!\n", dropped );
-//            getInput(question, inputBuffer, bufferLength);
-//        }
-//    }
-//    else
-//    {
-//        inputBuffer[strlen(inputBuffer) -1] = '\0';
-//    }
-//    //TODO: fix this.
-//    return 0;
-}
-
-void sendMessage(int servSocket)
-{
-    buffer[0] = '2';
-    buffer[1] = ' ';
-    
-    size_t input_size = getInput("\nEnter Message: <User ID>  <Message><.>\n", buffer, BUFFERSIZE, 2);
-    
-    if(send(servSocket, buffer, input_size, 0)<0)
-        perror("Unable to send message");
-    else
-        printf("\nMessage sent successfully\n----------------------");
-}
-
-void getMessages(int servSocket)
-{
-    //TODO: Maintain who the current user is. 
-    buffer[0] = '3';
-    buffer[1] = '\0';
-}
-
-void getLine(char * buffer)
-{
-    getchar();
-    scanf ("%[^\n]%*c", buffer);
+    return false;
 }
 
 
-void getUserList(int servSocket)
+void printData(char * buffer)
 {
-    
-    int bytesRcvd = 0;
-    int totalBytesRcvd = 0;
-    send(servSocket, "1",1, 0);
-    printf("Receiving user List................\n ");
-    //For now lets assume all the data is received in one shot.
-    if ((bytesRcvd = recv(servSocket, buffer, 99, 0)) <= 0)
-        DieWithError("recv() failed or connection closed prematurely");
-        totalBytesRcvd += bytesRcvd; /* Keep tally of total bytes */
-        buffer[bytesRcvd] = '\0'; /* Terminate the string! */
-    
-    for(int i = 0; i < BUFFERSIZE; i++ )
+    for(int i = 0; i < SOCK_BUFFSIZE; i++ )
     {
         char a = buffer[i];
         if(a == ' ')
@@ -128,82 +57,260 @@ void getUserList(int servSocket)
         putchar(a);
     }
     printf("\n--------------------------------\n");
+}
+
+
+void getData(int servSocket, const char* cmd)
+{
+    int bytesRcvd = 0;
+    int totalBytesRcvd = 0;
+    send(servSocket, cmd, 1, 0);
     
+    
+    if ((bytesRcvd = recv(servSocket, buffer, SOCK_BUFFSIZE, 0)) <= 0)
+        perror("recv() failed or connection closed prematurely");
+    totalBytesRcvd += bytesRcvd;
+    
+    printf(buffer);
+}
+
+
+size_t getInput(char *question, char *inputBuffer, int bufferLength, size_t start_idx)
+{
+    size_t totalChar = start_idx;
+    printf("%s ", question);
+    
+    char in = fgetc(stdin);
+    
+    while (in == '\n' || in == ' ')
+    {
+        in = fgetc(stdin);
+    }
+    
+    while(in != '\n' && totalChar < bufferLength-1 )
+    {
+        inputBuffer[totalChar] = in;
+        in = fgetc(stdin);
+        totalChar += 1;
+    }
+    
+    inputBuffer[totalChar] = '\0';
+    
+    return totalChar += 1;
+}
+
+void sendMessage(int servSocket)
+{
+    buffer[0] = '2';
+    char recv = 0;
+    scanf("%c", &recv);
+    printf("Enter reciver's userid:");
+    scanf("%c", &recv);
+    buffer[1]=recv;
+    buffer[2] = '<';
+    
+    size_t input_size = getInput("\nEnter Message", buffer, SOCK_BUFFSIZE, 3);
+    strcat(buffer, ">");
+    
+    if(send(servSocket, buffer, sizeof(buffer), 0)<0)
+        perror("Unable to send message");
+    else
+        printf("\nMessage sent successfully\n----------------------");
+}
+
+void getMessages(int servSocket)
+{
+    //TODO: Maintain who the current user is in the server.
+    //I am already doing it.
+    
+    
+}
+
+void getLine(char * buffer)
+{
+    getchar();
+    scanf ("%[^\n]%*c", buffer);
+}
+
+//Prints data sepearated by space on new lines.
+
+
+
+void getUserList(int servSocket)
+{
+    
+    int bytesRcvd = 0;
+    int totalBytesRcvd = 0;
+    send(servSocket, "1",1, 0);
+    printf("Receiving user List................\n ");
+    //For now lets assume all the data is received in one shot.
+    if ((bytesRcvd = recv(servSocket, buffer, SOCK_BUFFSIZE, 0)) <= 0)
+        DieWithError("recv() failed or connection closed prematurely");
+    totalBytesRcvd += bytesRcvd; /* Keep tally of total bytes */
+    buffer[bytesRcvd] = '\0'; /* Terminate the string! */
+    
+    printData(buffer);
+    
+    
+}
+
+int createSock(char *servlP, unsigned short port)
+{
+    int sock = -1;
+    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+        perror("Failed to create socket. Please try again.");
+    
+    struct sockaddr_in servAddr;
+    
+    
+    memset(&servAddr, 0, sizeof(servAddr));
+    servAddr.sin_family = AF_INET; /* Internet address family */
+    servAddr.sin_addr.s_addr = inet_addr(servlP); /* Server IP address */
+    servAddr.sin_port = htons(port); /* Server port */
+    
+    if (connect(sock, (struct sockaddr *) &servAddr, sizeof(servAddr)) < 0)
+        perror("connect() failed. Try again.");
+    
+    return sock;
 }
 
 int loginToServer(char *servlP, unsigned short port)
 {
-//    char username [50];
-//    char password [50];
-//    printf("\nEnter username: ");
-//    getLine(username);
-//    printf("\nEnter password: ");
-//    getLine(password);
-//    char loginMessage[100];
-//    strcpy(loginMessage,"0 ");
-//    strcat(loginMessage, username);
-//    strcat(loginMessage," ");
-//    strcat(loginMessage, password);
     
-    int sock; /* Socket descriptor */
-    /* Create a reliable, stream socket using TCP */
-    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-        DieWithError(" socket () failed") ;
     
-    struct sockaddr_in echoServAddr; /* Echo server address */
-    /* Construct the server address structure */
-    memset(&echoServAddr, 0, sizeof(echoServAddr)); /* Zero out structure */
-    echoServAddr.sin_family = AF_INET; /* Internet address family */
-    echoServAddr.sin_addr.s_addr = inet_addr(servlP); /* Server IP address */
-    echoServAddr.sin_port = htons(port); /* Server port */
-    /* Establish the connection to the server */
-    if (connect(sock, (struct sockaddr *) &echoServAddr, sizeof(echoServAddr)) < 0)
-        DieWithError(" connect () failed");
+    buffer[0]='0';
+    buffer[1]='-';
+    strcat(buffer, userName);
+    strcat(buffer, "%");
+    strcat(buffer, password);
+    strcat(buffer, "%");
     
-    //TODO: fix this hard codded stuff
-    
-    if (send(sock, "0-user_1%pswd1", 14, 0) < 14)
+    int sock = createSock(servlP, port);
+    if (send(sock, buffer, SOCK_BUFFSIZE, 0) < SOCK_BUFFSIZE)
     {
-        //to do check if the server returns success.
         perror("Failed to login. Please try again");
-        //call login to server again.
+        
+    };
+    if (recv(sock, buffer, SOCK_BUFFSIZE, 0) < SOCK_BUFFSIZE)
+    {
+        if(buffer[0]!='0')
+        {
+                perror("Failed to recv login confirmation. Try Again");
+                return -1;
+        }
+        else
+        {
+            printf("Successfully connected to the server");
+            return sock;
+        }
+        
+        
+        
     };
     
     return sock;
-    //HandleTCPClient(sock);
-    
-    //close(sock);
 }
+
+//TODO: bye to disconnect..
+//Client reads it and sends appropriate msg to the server.
+void chatMsg (char * buffer, char * msg)
+{
+    strcpy(msg, userName);
+    strcat(msg, ": ");
+    strcat(msg, buffer);
+}
+
+void chatHandler(unsigned short sock)
+{
+    int recvMsgSize = 0;
+    while (1) {
+        while ((recvMsgSize = recv(sock, buffer, SOCK_BUFFSIZE, 0)) < SOCK_BUFFSIZE)
+        {
+            if(recvMsgSize == 0)
+            {
+                printf("\nChat Ended.");
+                break;
+            }
+            
+        }
+        if(recvMsgSize == 0)
+        {
+            break;
+        }
+        printf(buffer);
+        puts("\n");
+        getInput("You:", buffer, SOCK_BUFFSIZE,0);
+        char msg[SOCK_BUFFSIZE];
+        chatMsg(buffer, msg);
+        if(wannaExit(buffer))
+        {
+            printf("\nEnding chat");
+            close(sock);
+            
+            return;
+        }
+    
+    if (send(sock,msg, SOCK_BUFFSIZE, 0) < 0)
+            perror("send() failed");
+
+    }
+    printf("\n Waiting for other chatters.");
+}
+
+//TODO: Maintain username in the client
+void joinChat()
+{//get ip
+    char inputBuff[100];
+    int port = 0;
+    printf("\n Enter port number:");
+    scanf("%d", &port);
+    int sock = createSock("127.0.0.1", port);
+    if(sock<=0)
+    {
+        printf("Failed to join chat");
+        return;
+    }
+    int recvMsgSize = 0;
+    while(1){
+        getInput("You:", buffer, SOCK_BUFFSIZE,0);
+        if (wannaExit(buffer)) {
+            close(sock);
+            return;
+        }
+        char msg[200];
+        chatMsg(buffer, msg);
+        if (send(sock, msg, SOCK_BUFFSIZE, 0) < SOCK_BUFFSIZE)
+            perror("send() failed");
+        
+        while ((recvMsgSize = recv(sock, buffer, SOCK_BUFFSIZE, 0)) < SOCK_BUFFSIZE)
+        {
+            if(recvMsgSize == 0)
+            {
+                printf("\nChat Ended.");
+                return;
+            }
+            
+        }
+        printf(buffer);
+        printf("\n");
+    }
+}
+
+void initializeChat()
+{
+    int port = 0;
+    printf("\n Enter Port:");
+    scanf("%d", &port);
+    printf("\n Intializing Chat");
+    setupAndListenSocket(port, &chatHandler);
+}
+
+
 
 
 
 int main(int argc, char *argv[])
 {
-    
-//    if ((argc < 3) || (argc > 4)) /* Test for correct number of arguments */
-//    {
-//        fprintf(stderr, "Usage: %s <Server IP> <Echo Word> [<Echo Port>]\n", argv[0]);
-//        exit(1);
-//    }
-//    unsigned short echoServPort; /* Echo server port */
-//    char *servlP; /* Server IP address (dotted quad) */
-//    //char *echoString; /* String to send to echo server */
-//    
-//    servlP = argv[1] ; /* First arg' server IP address (dotted quad) */
-//    //echoString = argv[2] ; /* Second arg' string to echo */
-//    
-//    if (argc == 4)
-//        echoServPort = atoi(argv[3]); /* Use given port, if any */
-//    else
-//        echoServPort = 7; /* 7 is the well-known port for the echo service */
-//    
-//    
-    
-    
-    
-    
-    //TODO: setup and listen
-    //setupAndListenSocket(4000);
     bool stillRunning = true;
     char servIP[100];
     int servPort;
@@ -227,17 +334,18 @@ int main(int argc, char *argv[])
                 stillRunning = false;
                 break;
             case 0:
-                //TODO: fix this hardcoded mess
-//                fflush(stdout);
-//                printf("IP address: ");
-//                fflush(stdout);
-//                getchar();
-//                scanf ("%[^\n]%*c", &servIP);
+                fflush(stdout);
+                printf("IP address: ");
+                fflush(stdout);
+                getchar();
+                scanf ("%[^\n]%*c", &servIP);
                 printf("\nPort: ");
                 fflush(stdout);
                 scanf("%d", &servPort);
-//                servSocket = loginToServer(servIP, servPort);
-                servSocket = loginToServer("127.0.0.1", servPort);
+                getInput("\nUserName:", userName, 12, 0);
+                getInput("\nPassWord", password, 12,0);
+                servSocket = loginToServer(servIP, servPort);
+                //servSocket = loginToServer("127.0.0.1", servPort);
                 if (servSocket > 0)
                 {
                     printf("Connected to Server on port: %d \n\n\t\t ---------", servSocket);
@@ -260,15 +368,16 @@ int main(int argc, char *argv[])
                 continue;
                 break;
             case 3:
-                //if(servSocket == 0) printf("Connect to server first");
-                continue;
-                 break;
+                getData(servSocket, "3");
+                break;
             case 4:
                 //if(servSocket == 0) printf("Connect to server first");
-                continue;
+                //continue;
+                initializeChat();
                 break;
             case 5:
-                //if(servSocket == 0) printf("Connect to server first");
+                //if(servSocket == 0) printf("Connect to server first");    
+                joinChat();
                 continue;
                 break;
             default:
